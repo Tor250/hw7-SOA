@@ -1,4 +1,20 @@
-# hw5-SOA
+# hw7-SOA
+
+## Что добавлено в ДЗ7
+
+- CI/CD pipeline в `.github/workflows/ci.yml`: `build → unit tests → integration tests → E2E tests → load tests`.
+- Метрики `/metrics` для `producer` и `analytics-service`.
+- Prometheus, Grafana и Alertmanager в `docker-compose.yml`.
+- Дашборды Grafana для каждого сервиса и отдельный инфраструктурный дашборд.
+- Нагрузочный тест на `k6` и проверка SLI из Prometheus в CI.
+- Интеграционные и E2E тесты с очисткой тестового состояния.
+
+## Ветки
+
+- `hw7-base` — базовая версия без доработок ДЗ7.
+- `hw7-SOA` — текущая ветка с ДЗ7.
+
+Сравнить изменения можно командой `git diff hw7-base..hw7-SOA`.
 
 ## Запуск
 
@@ -32,7 +48,13 @@ docker compose down -v
 make up-d      # поднять в фоне
 make ps        # статус сервисов
 make logs      # логи
-make test      # интеграционный e2e тест
+make test      # полный E2E тест
+make unit      # unit tests
+make integration
+make e2e
+make load
+make collect-metrics
+make check-sli
 make agg       # пересчёт за последнюю доступную дату <= сегодня (UTC)
 make export    # экспорт за последнюю агрегированную дату <= сегодня
 make agg-latest
@@ -52,6 +74,8 @@ make down      # остановка и очистка
 - `postgres` — готовые агрегаты для внешнего чтения.
 - `minio` — S3-совместимое cold storage.
 - `grafana` — готовый datasource и дашборд.
+- `prometheus` — сбор сервисных и инфраструктурных метрик.
+- `alertmanager` — обработка и показ алертов.
 
 ## Эндпоинты
 
@@ -63,6 +87,8 @@ make down      # остановка и очистка
 - Schema Registry: `http://localhost:8081`
 - ClickHouse HTTP: `http://localhost:8123`
 - Grafana: `http://localhost:3000` (`admin` / `admin`)
+- Prometheus: `http://localhost:9090`
+- Alertmanager: `http://localhost:9093`
 - MinIO Console: `http://localhost:9001` (`minio` / `minio123`)
 - MinIO API: `http://localhost:9002`
 - PostgreSQL: `localhost:5433`
@@ -121,6 +147,7 @@ make reset-data           # очистить raw+aggregates (ClickHouse/PostgreS
 - Проверяет появление события в ClickHouse.
 - Затем проверяет ручной пересчёт агрегатов, upsert в PostgreSQL и экспорт в S3.
 - Тест изолирован уникальной датой, чтобы не конфликтовать с потоковыми синтетическими событиями.
+- После проверки тест удаляет тестовые события, агрегаты и объект в MinIO.
 
 ### 5. Aggregation Service и бизнес-метрики
 
@@ -174,3 +201,72 @@ make reset-data           # очистить raw+aggregates (ClickHouse/PostgreS
 - `infra/postgres/migrations` — PostgreSQL migrations.
 - `infra/grafana` — provisioning и dashboard.
 - `tests/integration` — интеграционные тесты.
+
+## ДЗ7: CI/CD, метрики и наблюдаемость
+
+### CI pipeline
+
+- Триггерится на `push` и `pull_request`.
+- Шаги: `build`, `unit tests`, `integration tests`, `E2E tests`, `load tests`.
+- Пайплайн падает при любой ошибке.
+- Логи compose-сценариев сохраняются в артефакты GitHub Actions.
+
+### Метрики
+
+Оба сервиса экспортируют `/metrics` с:
+
+- `http_requests_total{method,endpoint,status}`
+- `http_request_errors_total{method,endpoint,error_type}`
+- `http_request_duration_seconds_bucket{method,endpoint}`
+
+Prometheus скрейпит:
+
+- `producer`
+- `analytics-service`
+- `clickhouse-exporter`
+- `postgres-exporter`
+- `kafka-exporter`
+
+### Grafana
+
+Есть три дашборда:
+
+- `Producer Service`
+- `Analytics Service`
+- `Infrastructure`
+
+Видны:
+
+- p50 / p95 / p99 latency
+- error rate
+- throughput
+- Kafka / PostgreSQL / ClickHouse bottlenecks
+
+### Нагрузочное тестирование
+
+- Инструмент: `k6`
+- Сценарий: `10 VU`, `30s`
+- Проверки: `checks` на `GET /health` и `POST /events` должны быть > 99%, `p95 < 500ms` на `POST /events`
+- Результат `k6` сохраняется в `artifacts/load/summary.json`
+- Лог `k6` сохраняется в `artifacts/load/k6.log`
+- Сэмплы Prometheus и SLI сохраняются в `artifacts/ci/prometheus-samples.json` и `artifacts/ci/prometheus-sli.json`
+
+### Алерты
+
+Правила лежат в `infra/prometheus/alerts.yml`:
+
+- высокий error rate
+- высокая latency
+- недоступность сервиса
+- Kafka consumer lag
+
+Alertmanager поднимается вместе со стендом.
+
+### SLI / SLO
+
+Проверки выполняются скриптом `scripts/ci/check_prometheus_sli.py`:
+
+- `producer_error_rate` — SLO `<= 1%`, порог отказа `> 1%`
+- `producer_p95_latency_seconds` — SLO `<= 500ms`, порог отказа `> 500ms`
+- `producer_availability` — SLO `>= 99%`, порог отказа `< 99%`
+- `analytics_p95_latency_seconds` — SLO `<= 1s`, порог отказа `> 1s`

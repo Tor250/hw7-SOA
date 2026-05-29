@@ -4,10 +4,11 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 
 from src.common.logging_utils import configure_logging
 from src.common.models import MovieEventIn
+from src.common.observability import install_http_metrics, metrics_response
 from src.producer.generator import SyntheticEventGenerator
 from src.producer.publisher import KafkaMovieEventPublisher
 from src.producer.settings import ProducerSettings
@@ -37,11 +38,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="movie-producer", lifespan=lifespan)
+install_http_metrics(app)
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics() -> Response:
+    return metrics_response()
 
 
 @app.post("/events")
