@@ -26,7 +26,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{job=\"producer\",endpoint=\"/events\"}[1m]))",
+          "expr": "sum(rate(http_requests_total{job=\"producer\",endpoint=\"/events\"}[1m])) or vector(0)",
           "legendFormat": "events/s",
           "refId": "A"
         }
@@ -59,7 +59,7 @@
       },
       "targets": [
         {
-          "expr": "(sum(rate(http_request_errors_total{job=\"producer\",endpoint=\"/events\"}[2m])) / clamp_min(sum(rate(http_requests_total{job=\"producer\",endpoint=\"/events\"}[2m])), 1)) or vector(0)",
+          "expr": "(sum(rate(http_request_errors_total{job=\"producer\",endpoint=\"/events\"}[2m])) / (sum(rate(http_requests_total{job=\"producer\",endpoint=\"/events\"}[2m])) + 1e-9)) or vector(0)",
           "legendFormat": "error rate",
           "refId": "A"
         }
@@ -89,17 +89,17 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"producer\",endpoint=\"/events\"}[2m])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"producer\",endpoint=\"/events\"}[2m]))) or vector(0)",
           "legendFormat": "p50",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"producer\",endpoint=\"/events\"}[2m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"producer\",endpoint=\"/events\"}[2m]))) or vector(0)",
           "legendFormat": "p95",
           "refId": "B"
         },
         {
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"producer\",endpoint=\"/events\"}[2m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"producer\",endpoint=\"/events\"}[2m]))) or vector(0)",
           "legendFormat": "p99",
           "refId": "C"
         }

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 import httpx
@@ -10,7 +11,7 @@ import httpx
 CHECKS: dict[str, tuple[str, float, str]] = {
     "producer_error_rate": (
         'sum(rate(http_request_errors_total{job="producer",endpoint="/events"}[2m])) '
-        '/ clamp_min(sum(rate(http_requests_total{job="producer",endpoint="/events"}[2m])), 1)',
+        '/ (sum(rate(http_requests_total{job="producer",endpoint="/events"}[2m])) + 1e-9)',
         0.01,
         "<=",
     ),
@@ -22,7 +23,7 @@ CHECKS: dict[str, tuple[str, float, str]] = {
     ),
     "producer_availability": (
         'sum(rate(http_requests_total{job="producer",endpoint="/events",status=~"2.."}[2m])) '
-        '/ clamp_min(sum(rate(http_requests_total{job="producer",endpoint="/events"}[2m])), 1)',
+        '/ (sum(rate(http_requests_total{job="producer",endpoint="/events"}[2m])) + 1e-9)',
         0.99,
         ">=",
     ),
@@ -41,7 +42,10 @@ def query_value(client: httpx.Client, expression: str) -> float:
     payload = response.json()["data"]["result"]
     if not payload:
         return 0.0
-    return float(payload[0]["value"][1])
+    value = float(payload[0]["value"][1])
+    if not math.isfinite(value):
+        return 0.0
+    return value
 
 
 def main() -> None:

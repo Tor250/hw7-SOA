@@ -26,12 +26,12 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{job=\"analytics-service\",endpoint=\"/aggregation/run\"}[1m]))",
+          "expr": "sum(rate(http_requests_total{job=\"analytics-service\",endpoint=\"/aggregation/run\"}[1m])) or vector(0)",
           "legendFormat": "aggregation/s",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(http_requests_total{job=\"analytics-service\",endpoint=\"/export/run\"}[1m]))",
+          "expr": "sum(rate(http_requests_total{job=\"analytics-service\",endpoint=\"/export/run\"}[1m])) or vector(0)",
           "legendFormat": "export/s",
           "refId": "B"
         }
@@ -64,7 +64,7 @@
       },
       "targets": [
         {
-          "expr": "(sum(rate(http_request_errors_total{job=\"analytics-service\"}[2m])) / clamp_min(sum(rate(http_requests_total{job=\"analytics-service\"}[2m])), 1)) or vector(0)",
+          "expr": "(sum(rate(http_request_errors_total{job=\"analytics-service\"}[2m])) / (sum(rate(http_requests_total{job=\"analytics-service\"}[2m])) + 1e-9)) or vector(0)",
           "legendFormat": "error rate",
           "refId": "A"
         }
@@ -91,17 +91,17 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"analytics-service\",endpoint=\"/aggregation/run\"}[2m])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"analytics-service\",endpoint=\"/aggregation/run\"}[2m]))) or vector(0)",
           "legendFormat": "aggregation p50",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"analytics-service\",endpoint=\"/aggregation/run\"}[2m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"analytics-service\",endpoint=\"/aggregation/run\"}[2m]))) or vector(0)",
           "legendFormat": "aggregation p95",
           "refId": "B"
         },
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"analytics-service\",endpoint=\"/export/run\"}[2m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"analytics-service\",endpoint=\"/export/run\"}[2m]))) or vector(0)",
           "legendFormat": "export p95",
           "refId": "C"
         }

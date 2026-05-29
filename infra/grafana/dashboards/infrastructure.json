@@ -122,7 +122,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(pg_stat_database_blks_hit[5m])) / clamp_min(sum(rate(pg_stat_database_blks_hit[5m])) + sum(rate(pg_stat_database_blks_read[5m])), 1)",
+          "expr": "(sum(rate(pg_stat_database_blks_hit[5m])) / (sum(rate(pg_stat_database_blks_hit[5m])) + sum(rate(pg_stat_database_blks_read[5m])) + 1e-9)) or vector(0)",
           "legendFormat": "cache hit ratio",
           "refId": "A"
         }
