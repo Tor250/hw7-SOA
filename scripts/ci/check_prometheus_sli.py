@@ -9,26 +9,26 @@ import httpx
 
 CHECKS: dict[str, tuple[str, float, str]] = {
     "producer_error_rate": (
-        'sum(rate(http_request_errors_total{job="producer",endpoint="/events"}[5m])) '
-        '/ clamp_min(sum(rate(http_requests_total{job="producer",endpoint="/events"}[5m])), 1)',
+        'sum(rate(http_request_errors_total{job="producer",endpoint="/events"}[2m])) '
+        '/ clamp_min(sum(rate(http_requests_total{job="producer",endpoint="/events"}[2m])), 1)',
         0.01,
         "<=",
     ),
     "producer_p95_latency_seconds": (
         'histogram_quantile(0.95, '
-        'sum by (le) (rate(http_request_duration_seconds_bucket{job="producer",endpoint="/events"}[5m])))',
+        'sum by (le) (rate(http_request_duration_seconds_bucket{job="producer",endpoint="/events"}[2m])))',
         0.5,
         "<=",
     ),
     "producer_availability": (
-        'sum(rate(http_requests_total{job="producer",endpoint="/events",status=~"2.."}[5m])) '
-        '/ clamp_min(sum(rate(http_requests_total{job="producer",endpoint="/events"}[5m])), 1)',
+        'sum(rate(http_requests_total{job="producer",endpoint="/events",status=~"2.."}[2m])) '
+        '/ clamp_min(sum(rate(http_requests_total{job="producer",endpoint="/events"}[2m])), 1)',
         0.99,
         ">=",
     ),
     "analytics_p95_latency_seconds": (
         'histogram_quantile(0.95, '
-        'sum by (le) (rate(http_request_duration_seconds_bucket{job="analytics-service",endpoint="/aggregation/run"}[5m])))',
+        'sum by (le) (rate(http_request_duration_seconds_bucket{job="analytics-service",endpoint="/aggregation/run"}[2m])))',
         1.0,
         "<=",
     ),

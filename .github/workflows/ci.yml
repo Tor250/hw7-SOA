@@ -103,7 +103,7 @@ jobs:
         run: mkdir -p artifacts/ci artifacts/load
 
       - name: Start full stack
-        run: docker compose up -d --build
+        run: PRODUCER_ENABLE_GENERATOR=false docker compose up -d --build
 
       - name: Run load test and collect Prometheus metrics
         run: bash scripts/ci/run_load_and_collect.sh

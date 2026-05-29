@@ -27,20 +27,21 @@ build:
 	$(COMPOSE) build
 
 test:
-	$(COMPOSE) --profile test up --build --abort-on-container-exit e2e-test
+	$(MAKE) e2e
 
 unit:
 	python3 -m pytest -q tests/unit
 
 integration:
-	$(COMPOSE) --profile test up --build --abort-on-container-exit integration-test
+	$(COMPOSE) --profile test up --build --abort-on-container-exit --exit-code-from integration-test integration-test
 
 e2e:
-	$(COMPOSE) --profile test up --build --abort-on-container-exit e2e-test
+	$(COMPOSE) --profile test up --build --abort-on-container-exit --exit-code-from e2e-test e2e-test
 
 load:
 	mkdir -p artifacts/load
-	$(COMPOSE) --profile test up --build --abort-on-container-exit load-test
+	PRODUCER_ENABLE_GENERATOR=false $(COMPOSE) up -d --build
+	bash scripts/ci/run_load_and_collect.sh
 
 collect-metrics:
 	mkdir -p artifacts/ci

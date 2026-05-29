@@ -64,6 +64,10 @@ docker compose --profile test run --rm load-test 2>&1 | tee artifacts/load/k6.lo
 
 wait "${collector_pid}"
 
+python3 scripts/ci/validate_k6_summary.py \
+  --summary artifacts/load/summary.json \
+  --output artifacts/load/threshold-validation.json
+
 python3 scripts/ci/check_prometheus_sli.py \
   --prometheus-url "${PROMETHEUS_URL}" \
   --output artifacts/ci/prometheus-sli.json
