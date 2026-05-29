@@ -4,13 +4,14 @@ import asyncio
 from contextlib import asynccontextmanager, suppress
 from datetime import date
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Response
 
 from src.analytics.exporter import S3Exporter
 from src.analytics.repository import AnalyticsRepository
 from src.analytics.service import AnalyticsService
 from src.analytics.settings import AnalyticsSettings
 from src.common.logging_utils import configure_logging
+from src.common.observability import install_http_metrics, metrics_response
 
 
 configure_logging()
@@ -74,11 +75,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="analytics-service", lifespan=lifespan)
+install_http_metrics(app)
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics() -> Response:
+    return metrics_response()
 
 
 @app.post("/aggregation/run")

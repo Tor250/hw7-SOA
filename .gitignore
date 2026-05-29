@@ -1,3 +1,5 @@
 __pycache__/
 .pytest_cache/
 схемы/
+artifacts/
+.ruff_cache/

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from threading import Event as ThreadEvent
 
 from confluent_kafka import KafkaException, Producer
 from confluent_kafka.schema_registry import Schema, SchemaRegistryClient
@@ -48,8 +47,6 @@ class KafkaMovieEventPublisher:
         reraise=True,
     )
     def publish(self, event: MovieEventRecord) -> str:
-        delivery_event = ThreadEvent()
-        delivery_state: dict[str, object] = {}
         key = self.key_serializer(
             event.user_id,
             SerializationContext(self.topic, MessageField.KEY),
@@ -60,21 +57,19 @@ class KafkaMovieEventPublisher:
         )
 
         def on_delivery(err, msg) -> None:
-            delivery_state["error"] = err
-            delivery_state["message"] = msg
-            delivery_event.set()
+            if err is not None:
+                LOGGER.error("Failed to deliver event_id=%s: %s", event.event_id, err)
+            else:
+                LOGGER.debug(
+                    "Delivered event_id=%s topic=%s partition=%s offset=%s",
+                    event.event_id,
+                    msg.topic(),
+                    msg.partition(),
+                    msg.offset(),
+                )
 
         self.producer.produce(self.topic, key=key, value=value, on_delivery=on_delivery)
         self.producer.poll(0)
-
-        if not delivery_event.wait(timeout=10):
-            self.producer.flush(timeout=10)
-            if not delivery_event.wait(timeout=5):
-                raise TimeoutError("Timed out waiting for Kafka delivery report")
-
-        error = delivery_state.get("error")
-        if error is not None:
-            raise KafkaException(error)
 
         LOGGER.info(
             "Published event_id=%s event_type=%s timestamp=%s",

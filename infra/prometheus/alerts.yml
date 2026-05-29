@@ -1,0 +1,46 @@
+groups:
+  - name: service-health
+    rules:
+      - alert: ProducerHighErrorRate
+        expr: |
+          sum(rate(http_request_errors_total{job="producer",endpoint="/events"}[5m]))
+            / clamp_min(sum(rate(http_requests_total{job="producer",endpoint="/events"}[5m])), 1) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: Высокая доля ошибок на producer
+          description: Доля ошибок на endpoint /events у producer выше 5% в течение 3 минут.
+
+      - alert: ProducerHighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket{job="producer",endpoint="/events"}[5m]))
+          ) > 1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: Высокая задержка producer
+          description: p95 latency на endpoint /events у producer выше 1 секунды в течение 3 минут.
+
+      - alert: ServiceTargetDown
+        expr: up{job=~"producer|analytics-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Сервис недоступен
+          description: Один из пользовательских сервисов перестал отвечать на scrape-запросы Prometheus.
+
+  - name: infrastructure-health
+    rules:
+      - alert: KafkaConsumerLagHigh
+        expr: sum(kafka_consumergroup_lag) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Высокий lag Kafka consumer
+          description: Суммарный consumer lag по Kafka превышает 100 в течение 5 минут.

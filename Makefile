@@ -3,7 +3,7 @@ DATE ?=
 LATEST_RAW_DATE_QUERY := SELECT if(count()=0, '', toString(max(event_date))) FROM analytics.movie_events WHERE event_date <= today()
 LATEST_METRIC_DATE_QUERY := SELECT COALESCE(to_char(max(metric_date), 'YYYY-MM-DD'), '') FROM metric_values WHERE metric_date <= CURRENT_DATE
 
-.PHONY: up up-d down restart ps logs build test test-run agg agg-latest export export-latest smoke retention-check grafana-sync reset-data
+.PHONY: up up-d down restart ps logs build test test-run unit integration e2e load collect-metrics check-sli agg agg-latest export export-latest smoke retention-check grafana-sync reset-data
 
 up:
 	$(COMPOSE) up --build
@@ -27,7 +27,28 @@ build:
 	$(COMPOSE) build
 
 test:
+	$(COMPOSE) --profile test up --build --abort-on-container-exit e2e-test
+
+unit:
+	python3 -m pytest -q tests/unit
+
+integration:
 	$(COMPOSE) --profile test up --build --abort-on-container-exit integration-test
+
+e2e:
+	$(COMPOSE) --profile test up --build --abort-on-container-exit e2e-test
+
+load:
+	mkdir -p artifacts/load
+	$(COMPOSE) --profile test up --build --abort-on-container-exit load-test
+
+collect-metrics:
+	mkdir -p artifacts/ci
+	python3 scripts/ci/collect_prometheus_samples.py --output artifacts/ci/prometheus-samples.json
+
+check-sli:
+	mkdir -p artifacts/ci
+	python3 scripts/ci/check_prometheus_sli.py --output artifacts/ci/prometheus-sli.json
 
 test-run:
 	$(COMPOSE) --profile test run --rm integration-test

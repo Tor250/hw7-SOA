@@ -45,25 +45,31 @@ def wait_for_schema_registry(url: str, attempts: int = 60) -> None:
     raise TimeoutError("Schema Registry is not ready")
 
 
-def create_topic(bootstrap_servers: str) -> None:
+def create_topic(
+    bootstrap_servers: str,
+    topic_name: str,
+    num_partitions: int,
+    replication_factor: int,
+    config: dict[str, str] | None = None,
+) -> None:
     admin = AdminClient({"bootstrap.servers": bootstrap_servers})
     futures = admin.create_topics(
         [
             NewTopic(
-                topic=MOVIE_EVENTS_TOPIC,
-                num_partitions=3,
-                replication_factor=2,
-                config={"min.insync.replicas": "1"},
+                topic=topic_name,
+                num_partitions=num_partitions,
+                replication_factor=replication_factor,
+                config=config or {"min.insync.replicas": "1"},
             )
         ]
     )
-    future = futures[MOVIE_EVENTS_TOPIC]
+    future = futures[topic_name]
     try:
         future.result()
-        LOGGER.info("Created topic %s", MOVIE_EVENTS_TOPIC)
+        LOGGER.info("Created topic %s", topic_name)
     except Exception as exc:
         if "TOPIC_ALREADY_EXISTS" in str(exc):
-            LOGGER.info("Topic %s already exists", MOVIE_EVENTS_TOPIC)
+            LOGGER.info("Topic %s already exists", topic_name)
         else:
             raise
 
@@ -96,10 +102,29 @@ def main() -> None:
         "kafka-1:9092,kafka-2:9092,kafka-3:9092",
     )
     schema_registry_url = os.getenv("SCHEMA_REGISTRY_URL", "http://schema-registry:8081")
+    create_schema_registry_topic = os.getenv("CREATE_SCHEMA_REGISTRY_TOPIC", "false").lower() == "true"
+    create_movie_events_topic = os.getenv("CREATE_MOVIE_EVENTS_TOPIC", "true").lower() == "true"
+    should_register_schema = os.getenv("REGISTER_SCHEMA", "true").lower() == "true"
+
     wait_for_kafka(bootstrap_servers)
-    wait_for_schema_registry(schema_registry_url)
-    create_topic(bootstrap_servers)
-    register_schema(schema_registry_url)
+    if create_schema_registry_topic:
+        create_topic(
+            bootstrap_servers,
+            "_schemas",
+            1,
+            3,
+            config={
+                "cleanup.policy": "compact",
+                "min.insync.replicas": "1",
+            },
+        )
+
+    if create_movie_events_topic:
+        create_topic(bootstrap_servers, MOVIE_EVENTS_TOPIC, 3, 2)
+
+    if should_register_schema:
+        wait_for_schema_registry(schema_registry_url)
+        register_schema(schema_registry_url)
 
 
 if __name__ == "__main__":

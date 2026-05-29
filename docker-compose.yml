@@ -87,6 +87,8 @@ services:
     image: confluentinc/cp-schema-registry:7.7.1
     hostname: schema-registry
     depends_on:
+      schema-registry-bootstrap:
+        condition: service_completed_successfully
       kafka-1:
         condition: service_healthy
       kafka-2:
@@ -106,6 +108,25 @@ services:
       timeout: 10s
       retries: 20
       start_period: 20s
+
+  schema-registry-bootstrap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "src.scripts.init_kafka"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      CREATE_SCHEMA_REGISTRY_TOPIC: "true"
+      CREATE_MOVIE_EVENTS_TOPIC: "false"
+      REGISTER_SCHEMA: "false"
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+    restart: "no"
 
   kafka-init:
     build:
@@ -264,6 +285,52 @@ services:
       retries: 20
       start_period: 25s
 
+  clickhouse-exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "src.infra.clickhouse_exporter"]
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_USER: analytics
+      CLICKHOUSE_PASSWORD: analytics
+      CLICKHOUSE_DATABASE: analytics
+      EXPORTER_PORT: "9108"
+      REFRESH_INTERVAL_SECONDS: "15"
+    depends_on:
+      clickhouse-init:
+        condition: service_completed_successfully
+    ports:
+      - "9108:9108"
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    environment:
+      DATA_SOURCE_NAME: postgresql://analytics:analytics@postgres:5432/analytics?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "9187:9187"
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.8.0
+    command:
+      - "--kafka.server=kafka-1:9092"
+      - "--kafka.server=kafka-2:9092"
+      - "--kafka.server=kafka-3:9092"
+      - "--web.listen-address=:9308"
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+    ports:
+      - "9308:9308"
+
   grafana:
     image: grafana/grafana-oss:11.1.4
     hostname: grafana
@@ -287,7 +354,61 @@ services:
       retries: 20
       start_period: 40s
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    hostname: prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+    depends_on:
+      clickhouse-exporter:
+        condition: service_started
+      postgres-exporter:
+        condition: service_started
+      kafka-exporter:
+        condition: service_started
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    hostname: alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+      - "--web.external-url=http://localhost:9093"
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./infra/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+
   integration-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["test"]
+    command: ["pytest", "-q", "tests/integration/test_ingestion.py"]
+    environment:
+      PRODUCER_URL: http://producer:8000
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_USER: analytics
+      CLICKHOUSE_PASSWORD: analytics
+    depends_on:
+      producer:
+        condition: service_healthy
+      clickhouse-init:
+        condition: service_completed_successfully
+    restart: "no"
+
+  e2e-test:
     build:
       context: .
       dockerfile: Dockerfile
@@ -315,6 +436,24 @@ services:
         condition: service_completed_successfully
     restart: "no"
 
+  load-test:
+    image: grafana/k6:0.52.0
+    profiles: ["test"]
+    user: "0:0"
+    command:
+      - "run"
+      - "--summary-export=/results/summary.json"
+      - "/scripts/load_test.js"
+    environment:
+      PRODUCER_URL: http://producer:8000
+    volumes:
+      - ./tests/load:/scripts:ro
+      - ./artifacts/load:/results
+    depends_on:
+      producer:
+        condition: service_healthy
+    restart: "no"
+
 volumes:
   kafka-1-data:
   kafka-2-data:
@@ -323,3 +462,5 @@ volumes:
   postgres-data:
   minio-data:
   grafana-data:
+  prometheus-data:
+  alertmanager-data:
