@@ -248,6 +248,8 @@ Prometheus скрейпит:
 - Сценарий: `10 VU`, `30s`
 - Проверки: `checks` на `GET /health` и `POST /events` должны быть > 99%, `p95 < 500ms` на `POST /events`
 - Результат `k6` сохраняется в `artifacts/load/summary.json`
+- Лог `k6` сохраняется в `artifacts/load/k6.log`
+- Сэмплы Prometheus и SLI сохраняются в `artifacts/ci/prometheus-samples.json` и `artifacts/ci/prometheus-sli.json`
 
 ### Алерты
 
